@@ -1,3 +1,8 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const form = document.getElementById("form");
 const input = document.getElementById("input");
 const list = document.getElementById("list");
@@ -5,11 +10,82 @@ const count = document.getElementById("count");
 const clearBtn = document.getElementById("clear");
 const filterBtns = document.querySelectorAll(".filter");
 
-let todos = JSON.parse(localStorage.getItem("todos") || "[]");
+let todos = [];
 let filter = "all";
 
-function save() {
-  localStorage.setItem("todos", JSON.stringify(todos));
+// --- Veri katmanı (Supabase) ---
+
+async function loadTodos() {
+  const { data, error } = await supabase
+    .from("todos")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) {
+    showError("Görevler yüklenemedi: " + error.message);
+    return;
+  }
+  todos = data;
+  render();
+}
+
+async function addTodo(text) {
+  const { data, error } = await supabase
+    .from("todos")
+    .insert({ text })
+    .select()
+    .single();
+  if (error) {
+    showError("Görev eklenemedi: " + error.message);
+    return;
+  }
+  todos.push(data);
+  render();
+}
+
+async function toggleTodo(todo, done) {
+  const { error } = await supabase
+    .from("todos")
+    .update({ done })
+    .eq("id", todo.id);
+  if (error) {
+    showError("Güncellenemedi: " + error.message);
+    return;
+  }
+  todo.done = done;
+  render();
+}
+
+async function deleteTodo(id) {
+  const { error } = await supabase.from("todos").delete().eq("id", id);
+  if (error) {
+    showError("Silinemedi: " + error.message);
+    return;
+  }
+  todos = todos.filter(t => t.id !== id);
+  render();
+}
+
+async function clearDone() {
+  const doneIds = todos.filter(t => t.done).map(t => t.id);
+  if (doneIds.length === 0) return;
+  const { error } = await supabase.from("todos").delete().in("id", doneIds);
+  if (error) {
+    showError("Temizlenemedi: " + error.message);
+    return;
+  }
+  todos = todos.filter(t => !t.done);
+  render();
+}
+
+// --- Arayüz ---
+
+function showError(msg) {
+  list.innerHTML = "";
+  const li = document.createElement("li");
+  li.className = "empty";
+  li.style.color = "#d33";
+  li.textContent = "⚠ " + msg;
+  list.appendChild(li);
 }
 
 function render() {
@@ -35,11 +111,7 @@ function render() {
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.checked = todo.done;
-    checkbox.addEventListener("change", () => {
-      todo.done = checkbox.checked;
-      save();
-      render();
-    });
+    checkbox.addEventListener("change", () => toggleTodo(todo, checkbox.checked));
 
     const span = document.createElement("span");
     span.className = "text";
@@ -48,11 +120,7 @@ function render() {
     const del = document.createElement("button");
     del.className = "del";
     del.textContent = "✕";
-    del.addEventListener("click", () => {
-      todos = todos.filter(t => t.id !== todo.id);
-      save();
-      render();
-    });
+    del.addEventListener("click", () => deleteTodo(todo.id));
 
     li.append(checkbox, span, del);
     list.appendChild(li);
@@ -66,17 +134,11 @@ form.addEventListener("submit", e => {
   e.preventDefault();
   const text = input.value.trim();
   if (!text) return;
-  todos.push({ id: Date.now(), text, done: false });
   input.value = "";
-  save();
-  render();
+  addTodo(text);
 });
 
-clearBtn.addEventListener("click", () => {
-  todos = todos.filter(t => !t.done);
-  save();
-  render();
-});
+clearBtn.addEventListener("click", clearDone);
 
 filterBtns.forEach(btn => {
   btn.addEventListener("click", () => {
@@ -87,4 +149,4 @@ filterBtns.forEach(btn => {
   });
 });
 
-render();
+loadTodos();
