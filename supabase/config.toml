@@ -1,0 +1,11 @@
+project_id = "ekecqsakyvjirysoogff"
+
+[auth]
+enabled = true
+site_url = "https://adnanparlas.github.io/todo-app/"
+additional_redirect_urls = ["https://adnanparlas.github.io/todo-app/", "http://localhost:3000"]
+
+[auth.email]
+enable_signup = true
+# E-posta onayı istemiyoruz: kullanıcı kayıt olur olmaz giriş yapabilir.
+enable_confirmations = false
